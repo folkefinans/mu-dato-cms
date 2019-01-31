@@ -1,0 +1,4 @@
+name: dato-cms
+version: '1.0'
+
+templateUpdateMode: merge

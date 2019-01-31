@@ -1,0 +1,203 @@
+Parameters:
+  DatoLambdaRole:
+    Description: Dato lambda Role Arn
+    Type: String
+
+Resources:
+  DatoNotifierLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: /aws/lambda/dato-notifier
+
+  DatoNotifierFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: >
+          'use strict';
+          const https = require('https');
+          module.exports.default = (event, context, callback) => {
+              console.log('message JSON', JSON.parse(event.Records[0].Sns.Message));
+              const message = JSON.parse(event.Records[0].Sns.Message);
+              console.log('state', message.detail.state);
+              const state = message.detail.state;
+              if (state === "SUCCEEDED" || state === "FAILED") {
+                let status = (state === "SUCCEEDED" ? "success" : "error");
+                let postData = JSON.stringify({status});
+                let options = {
+                    hostname: 'webhooks.datocms.com',
+                    port: '443',
+                    path: `/${process.env.DATOCMS_HOOK_ID}/deploy-results`,
+                    method: 'POST',
+                    headers: {"Content-Type":"application/json", 'Content-Length': postData.length}
+                };
+                let request = https.request(options, (res) => {
+                    console.log('statusCode:', res.statusCode);
+                    console.log('headers:', res.headers);
+                    res.on('end', () => {
+                      callback(null, 'notice sent')
+                    })
+                }).on('error', (e) => {
+                    console.error(e);
+                })
+                request.write(postData)
+                request.end();
+              } else {
+                return callback(null, 'not our notice');
+              }
+          };
+      FunctionName: dato-notifier
+      Handler: index.default
+      MemorySize: 1024
+      Role:
+        Fn::ImportValue:
+          DatoLambdaRoleArn
+      Runtime: nodejs8.10
+      Timeout: 6
+      Environment:
+        Variables:
+          DATOCMS_HOOK_ID: '{{resolve:ssm:DATOCMS_HOOK_ID:1}}'
+    DependsOn:
+    - DatoNotifierLogGroup
+
+  DatoNotifierSNSSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      TopicArn:
+        Ref: PipelineNotificationTopic
+      Protocol: lambda
+      Endpoint:
+        Fn::GetAtt:
+        - DatoNotifierFunction
+        - Arn
+
+  DatoSNSLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - DatoNotifierFunction
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal:
+        Fn::Sub: sns.${AWS::URLSuffix}
+      SourceArn:
+        Ref: PipelineNotificationTopic
+
+  DatoDeployerLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: /aws/lambda/dato-deployer
+
+  DatoDeployerFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: >
+          'use strict';
+          const AWS = require('aws-sdk');
+          module.exports.default = async (event, context) => {
+              console.log('event', event);
+              console.log('context', context);
+              let codepipeline = new AWS.CodePipeline();
+              let params = {name: process.env.PIPELINE_NAME};
+              console.log('params', params);
+              return codepipeline.startPipelineExecution(params).promise().then((result) => {
+                  console.log('result', result);
+                  return {
+                      statusCode: 200,
+                      body: JSON.stringify({
+                          result: result,
+                          input: event,
+                      }),
+                  };
+              }).catch((err) => {
+                  console.log('error');
+                  console.log(err, err.stack);
+              });
+          };
+      FunctionName: dato-deployer
+      Handler: index.default
+      MemorySize: 1024
+      Role:
+        Fn::ImportValue:
+          DatoLambdaRoleArn
+      Runtime: nodejs8.10
+      Timeout: 6
+      Environment:
+        Variables:
+          PIPELINE_NAME:
+            Fn::Sub: ${Namespace}-${ServiceName}
+    DependsOn:
+    - DatoDeployerLogGroup
+
+  DatoApiGatewayRestApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: dato-deployer
+      EndpointConfiguration:
+        Types:
+        - EDGE
+
+  DatoApiGatewayResourceTrigger:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      ParentId:
+        Fn::GetAtt:
+        - DatoApiGatewayRestApi
+        - RootResourceId
+      PathPart: trigger
+      RestApiId:
+        Ref: DatoApiGatewayRestApi
+
+  DatoApiGatewayMethodTriggerPost:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: POST
+      RequestParameters: {}
+      ResourceId:
+        Ref: DatoApiGatewayResourceTrigger
+      RestApiId:
+        Ref: DatoApiGatewayRestApi
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Join:
+          - ''
+          - - Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+            - Fn::GetAtt:
+              - DatoDeployerFunction
+              - Arn
+            - /invocations
+      MethodResponses: []
+
+  DatoApiGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      RestApiId:
+        Ref: DatoApiGatewayRestApi
+      StageName: deploy
+    DependsOn:
+    - DatoApiGatewayMethodTriggerPost
+
+  DatoDeployLambdaPermissionApiGateway:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - DatoDeployerFunction
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal:
+        Fn::Sub: apigateway.${AWS::URLSuffix}
+      SourceArn:
+        Fn::Sub: arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${DatoApiGatewayRestApi}/*/*
+
+Outputs:
+  DatoDeployerTriggerEndpoint:
+    Description: URL of the dato deployer webhook
+    Value:
+      Fn::Sub: https://${DatoApiGatewayRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/deploy

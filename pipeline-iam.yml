@@ -1,0 +1,62 @@
+Resources:
+  DatoLambdaLoggingPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "Policy for allowing dato lambdas to log"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - 'logs:CreateLogStream'
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/dato-*:*
+        - Effect: Allow
+          Action:
+          - 'logs:PutLogEvents'
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/dato-*:*:*
+
+  DatoCodePipelinePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: "Policy for allowing dato lambdas to trigger pipeline"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - 'codepipeline:StartPipelineExecution'
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Namespace}-${ServiceName}
+
+  DatoLambdaRole:
+    Type: 'AWS::IAM::Role'
+    DependsOn:
+      - DatoLambdaLoggingPolicy
+      - DatoCodePipelinePolicy
+    Properties:
+      ManagedPolicyArns:
+        - Ref: DatoLambdaLoggingPolicy
+        - Ref: DatoCodePipelinePolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      Path: /
+      RoleName: dato-lambda-role
+
+Outputs:
+  DatoLambdaRole:
+    Description: Dato Lambda Role Arn
+    Value:
+      Fn::GetAtt:
+      - DatoLambdaRole
+      - Arn
+    Export:
+      Name: DatoLambdaRoleArn
