@@ -89,7 +89,7 @@ Resources:
     Type: 'AWS::Logs::LogGroup'
     Properties:
       LogGroupName:
-        Fn::Sub: /aws/lambda/${Namespace}-${ServiceName}-dato-deployer
+        Fn::Sub: /aws/lambda/dato-deployer-${Namespace}-${ServiceName}
 
   DatoDeployerFunction:
     Type: 'AWS::Lambda::Function'
