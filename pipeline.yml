@@ -7,7 +7,8 @@ Resources:
   DatoNotifierLogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: /aws/lambda/dato-notifier
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${Namespace}-${ServiceName}-dato-notifier
 
   DatoNotifierFunction:
     Type: 'AWS::Lambda::Function'
@@ -46,12 +47,12 @@ Resources:
                 return callback(null, 'not our notice');
               }
           };
-      FunctionName: dato-notifier
+      FunctionName:
+        Fn::Sub: ${Namespace}-${ServiceName}-dato-notifier
       Handler: index.default
       MemorySize: 1024
       Role:
-        Fn::ImportValue:
-          DatoLambdaRoleArn
+        Ref: DatoLambdaRoleArn
       Runtime: nodejs8.10
       Timeout: 6
       Environment:
@@ -87,7 +88,8 @@ Resources:
   DatoDeployerLogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: /aws/lambda/dato-deployer
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${Namespace}-${ServiceName}-dato-deployer
 
   DatoDeployerFunction:
     Type: 'AWS::Lambda::Function'
@@ -116,12 +118,12 @@ Resources:
                   console.log(err, err.stack);
               });
           };
-      FunctionName: dato-deployer
+      FunctionName:
+        Fn::Sub: ${Namespace}-${ServiceName}-dato-deployer
       Handler: index.default
       MemorySize: 1024
       Role:
-        Fn::ImportValue:
-          DatoLambdaRoleArn
+        Ref: DatoLambdaRole
       Runtime: nodejs8.10
       Timeout: 6
       Environment:
@@ -134,7 +136,8 @@ Resources:
   DatoApiGatewayRestApi:
     Type: 'AWS::ApiGateway::RestApi'
     Properties:
-      Name: dato-deployer
+      Name:
+        Fn::Sub: ${Namespace}-${ServiceName}-dato-deployer
       EndpointConfiguration:
         Types:
         - EDGE
