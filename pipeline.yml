@@ -8,7 +8,7 @@ Resources:
     Type: 'AWS::Logs::LogGroup'
     Properties:
       LogGroupName:
-        Fn::Sub: /aws/lambda/${Namespace}-${ServiceName}-dato-notifier
+        Fn::Sub: /aws/lambda/dato-notifier-${Namespace}-${ServiceName}
 
   DatoNotifierFunction:
     Type: 'AWS::Lambda::Function'
