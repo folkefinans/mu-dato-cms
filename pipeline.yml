@@ -52,7 +52,7 @@ Resources:
       Handler: index.default
       MemorySize: 1024
       Role:
-        Ref: DatoLambdaRoleArn
+        Ref: DatoLambdaRole
       Runtime: nodejs8.10
       Timeout: 6
       Environment:
