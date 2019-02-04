@@ -59,5 +59,3 @@ Outputs:
       Fn::GetAtt:
       - DatoLambdaRole
       - Arn
-    Export:
-      Name: DatoLambdaRoleArn
