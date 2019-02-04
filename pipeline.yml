@@ -48,7 +48,7 @@ Resources:
               }
           };
       FunctionName:
-        Fn::Sub: ${Namespace}-${ServiceName}-dato-notifier
+        Fn::Sub: dato-notifier-${Namespace}-${ServiceName}
       Handler: index.default
       MemorySize: 1024
       Role:
@@ -119,7 +119,7 @@ Resources:
               });
           };
       FunctionName:
-        Fn::Sub: ${Namespace}-${ServiceName}-dato-deployer
+        Fn::Sub: dato-deployer-${Namespace}-${ServiceName}
       Handler: index.default
       MemorySize: 1024
       Role:
